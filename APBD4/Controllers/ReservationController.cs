@@ -41,7 +41,13 @@ public class ReservationController : ControllerBase
     [HttpGet("{id}")]
     public ActionResult<Reservation> GetReservation(int id)
     {
-        var reservation = _reservations.First(r => r.Id == id);
+        var reservation = _reservations.FirstOrDefault(r => r.Id == id);
+
+        if (reservation is null)
+        {
+            return NotFound();
+        }
+        
         return Ok(reservation);
     }
 
@@ -49,6 +55,12 @@ public class ReservationController : ControllerBase
     public ActionResult<Reservation> AddReservation(Reservation reservation)
     {
         var room = _rooms.FirstOrDefault(r => r.Id == reservation.RoomId);
+        
+        bool isConflict = _reservations.Any(r => 
+            r.RoomId == reservation.RoomId && 
+            r.Date == reservation.Date && 
+            r.StartTime < reservation.EndTime && 
+            r.EndTime > reservation.StartTime);
         
         if (room is null)
         {
@@ -60,15 +72,15 @@ public class ReservationController : ControllerBase
             return BadRequest("Room is not active");
         }
 
-        if (_reservations.Any(r => r.StartTime >= reservation.StartTime && r.EndTime <= reservation.EndTime))
+        if (isConflict)
         {
-            return BadRequest("Reservation is already active");
+            return Conflict("Reservation is already active");
         }
         
         
         reservation.Id = _reservations.Any() ? _reservations.Max(r => r.Id) + 1 : 1;
         _reservations.Add(reservation);
-        return Ok(reservation);
+        return CreatedAtAction(nameof(GetReservation), new { id = reservation.Id }, reservation);
     }
 
     [HttpPut("{id}")]
@@ -79,7 +91,12 @@ public class ReservationController : ControllerBase
             return BadRequest(ModelState);
         }
         
-        var updatedReservation = _reservations.First(r => r.Id == id);
+        var updatedReservation = _reservations.FirstOrDefault(r => r.Id == id);
+
+        if (updatedReservation is null)
+        {
+            return NotFound();
+        }
         
         updatedReservation.RoomId = reservation.RoomId;
         updatedReservation.OrganizerName = reservation.OrganizerName;
@@ -89,6 +106,20 @@ public class ReservationController : ControllerBase
         updatedReservation.EndTime = reservation.EndTime;
         updatedReservation.Status = reservation.Status;
         
+        return Ok(updatedReservation);
+    }
+
+    [HttpDelete("{id}")]
+    public ActionResult<Reservation> DeleteReservation(int id)
+    {
+        var reservationToDelete = _reservations.FirstOrDefault(r => r.Id == id);
+
+        if (reservationToDelete is null)
+        {
+            return NotFound();
+        }
         
+        _reservations.Remove(reservationToDelete);
+        return NoContent();
     }
 }
